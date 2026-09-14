@@ -61,6 +61,8 @@ SKA_WEB_BASE_URL=https://ska-web-git-dev-sakuraofficials-projects.vercel.app
 
 TUI 会请求 `{SKA_WEB_BASE_URL}/api/v1`：文章 `/posts`、笔记 `/notes`、友链 `/friends`、关于 `/profile`。详情正文已是 markdown，无需 HTML 转换。列表按 cursor 分页，会拉完全部条目。
 
+主站列表左侧有 **分类栏**（文章 / 笔记），由 `src/api/categories.ts` 注册表驱动，以后加分类只需追加一项。快捷键：`[` `]` 切换分类，`h` / `←` 回到分类栏，`l` / `Enter` 进入列表，`Tab` 在分类栏、列表、侧栏之间循环。友链 / 关于仍在侧栏「友链」里，不进分类栏。
+
 API 契约见 ska-web 仓库 `docs/public-api.md`（`dev` 分支）。生产站 `https://www.sakura-io.com` 上的公开 API 以实际部署为准；当前 Expo / 本 TUI 使用上述预览地址。
 
 ## 技术栈

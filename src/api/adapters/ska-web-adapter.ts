@@ -1,5 +1,5 @@
 import type * as types from "../types";
-import type { BlogAdapter, QueryPostsParams } from "./types";
+import type { BlogAdapter, QueryPostParams, QueryPostsParams } from "./types";
 import { readCache, writeCache } from "./cache";
 import {
   createSkaWebClient,
@@ -10,6 +10,11 @@ import {
   type SkaWebClient,
   type SkaWebResource,
 } from "../ska-web";
+import {
+  CONTENT_CATEGORIES,
+  getContentCategory,
+  type ContentCategory,
+} from "../categories";
 
 export interface SkaWebAdapterConfig {
   baseUrl: string;
@@ -228,6 +233,7 @@ function toListed(posts: types.PostVo[], params: QueryPostsParams): types.Listed
 async function loadCatalog(
   client: SkaWebClient,
   resource: SkaWebResource,
+  category?: ContentCategory,
 ): Promise<types.PostVo[]> {
   if (resource === "friends") {
     const friends = await client.listFriends();
@@ -238,12 +244,12 @@ async function loadCatalog(
     return [profileToPostVo(profile)];
   }
 
+  const cat = category ?? getContentCategory(resource);
   const author = await client.getProfile().then(
     (p) => p.name || p.site.name || "sAkura-io",
     () => "sAkura-io",
   );
-  const items =
-    resource === "notes" ? await client.listNotes() : await client.listPosts();
+  const items = await client.listByPath(cat.listPath);
   return items.map((item) => summaryToPostVo(item, author));
 }
 
@@ -251,16 +257,21 @@ function refreshCatalog(
   cacheKey: string,
   client: SkaWebClient,
   resource: SkaWebResource,
+  category?: ContentCategory,
 ) {
-  loadCatalog(client, resource)
+  loadCatalog(client, resource, category)
     .then((posts) => {
       listCache.set(cacheKey, posts);
       lastFetchTime.set(cacheKey, Date.now());
       writeCache(cacheKey, posts);
     })
     .catch((err) => {
-      console.error(`[ska-web] 后台刷新失败 (${resource}):`, err);
+      console.error(`[ska-web] 后台刷新失败 (${cacheKey}):`, err);
     });
+}
+
+function isContentResource(resource: SkaWebResource): boolean {
+  return resource !== "friends" && resource !== "about";
 }
 
 export function createSkaWebAdapter(
@@ -269,13 +280,20 @@ export function createSkaWebAdapter(
   config: SkaWebAdapterConfig,
 ): BlogAdapter {
   const client = clientFor(config.baseUrl);
-  const cacheKey = `${id}:${config.resource}`;
+  const categories = isContentResource(config.resource)
+    ? CONTENT_CATEGORIES
+    : undefined;
 
   return {
     id,
     name,
     type: "ska-web",
+    categories,
     async queryPosts(params: QueryPostsParams = {}): Promise<types.ListedPostVoList> {
+      const category = categories
+        ? getContentCategory(params.category)
+        : undefined;
+      const cacheKey = `${id}:${category?.id ?? config.resource}`;
       let posts = listCache.get(cacheKey);
 
       if (!posts) {
@@ -284,9 +302,9 @@ export function createSkaWebAdapter(
           posts = disk;
           listCache.set(cacheKey, posts);
           lastFetchTime.set(cacheKey, Date.now() - CACHE_TTL_MS);
-          refreshCatalog(cacheKey, client, config.resource);
+          refreshCatalog(cacheKey, client, config.resource, category);
         } else {
-          posts = await loadCatalog(client, config.resource);
+          posts = await loadCatalog(client, config.resource, category);
           listCache.set(cacheKey, posts);
           lastFetchTime.set(cacheKey, Date.now());
           writeCache(cacheKey, posts);
@@ -294,18 +312,19 @@ export function createSkaWebAdapter(
       } else {
         const lastFetch = lastFetchTime.get(cacheKey) ?? 0;
         if (Date.now() - lastFetch > CACHE_TTL_MS) {
-          refreshCatalog(cacheKey, client, config.resource);
+          refreshCatalog(cacheKey, client, config.resource, category);
         }
       }
 
       return toListed(posts, params);
     },
-    async queryPostByName(name: string): Promise<types.PostVo> {
-      if (config.resource === "posts" || config.resource === "notes") {
-        const detail =
-          config.resource === "notes"
-            ? await client.getNote(name)
-            : await client.getPost(name);
+    async queryPostByName(
+      name: string,
+      params: QueryPostParams = {},
+    ): Promise<types.PostVo> {
+      if (categories) {
+        const category = getContentCategory(params.category);
+        const detail = await client.getByPath(category.detailPath, name);
         const profileName = await client.getProfile().then(
           (p) => p.name || "sAkura-io",
           () => "sAkura-io",
@@ -313,6 +332,7 @@ export function createSkaWebAdapter(
         return detailToPostVo(detail, profileName);
       }
 
+      const cacheKey = `${id}:${config.resource}`;
       let posts = listCache.get(cacheKey);
       if (!posts) {
         await this.queryPosts({ page: 1, size: 1 });

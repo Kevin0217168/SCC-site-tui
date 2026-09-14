@@ -1,7 +1,8 @@
 /** @jsxImportSource @opentui/solid */
-import { createResource, createEffect, Show } from "solid-js";
+import { createResource, createEffect, Show, createMemo } from "solid-js";
 import { useTheme } from "../context/ThemeContext";
 import { PostList } from "./PostList";
+import { CategoryColumn } from "./CategoryColumn";
 import { getAdapter } from "../api/adapters";
 import { GifPlayer } from "./GifPlayer";
 // @ts-ignore
@@ -15,39 +16,72 @@ import { usePostContext } from "../context/PostContext";
 import { postToMarkdown } from "../lib/postToMarkdown";
 import { useSession } from "../context/SessionContext";
 import { TextAttributes } from "@opentui/core";
+import { getContentCategory } from "../api/categories";
+import { useFocusGroup, useFocusManager } from "../context/FocusContext";
 
 export function MainContent() {
   const { theme } = useTheme();
   const chat = useChat();
-  const { currentSource, showPost, setShowPost } = usePostContext();
+  const {
+    currentSource,
+    currentCategory,
+    showPost,
+    setShowPost,
+  } = usePostContext();
   const session = useSession();
+  const { activateGroup, _setFocusedIndex } = useFocusManager();
+  useFocusGroup("main");
+
+  const categories = createMemo(() => {
+    try {
+      return getAdapter(currentSource()).categories ?? [];
+    } catch {
+      return [];
+    }
+  });
+
+  const activeCategory = createMemo(() =>
+    categories().length > 0 ? getContentCategory(currentCategory()) : undefined,
+  );
+
+  const showCategoryColumn = () =>
+    showPost() == null && categories().length > 0;
 
   const [posts] = createResource(
-    () => currentSource(),
-    async (sourceId) => {
+    () => ({ sourceId: currentSource(), category: currentCategory() }),
+    async ({ sourceId, category }) => {
       const adapter = getAdapter(sourceId);
-      return adapter.queryPosts({ page: 1, size: undefined });
-    }
+      return adapter.queryPosts({
+        page: 1,
+        size: undefined,
+        category: adapter.categories ? category : undefined,
+      });
+    },
   );
+
+  createEffect(() => {
+    currentCategory();
+    _setFocusedIndex("main", 0);
+  });
 
   // 当 showPost 变化时，更新 AI 上下文
   createEffect(() => {
     const post = showPost();
     const sourceId = currentSource();
+    const categoryId = currentCategory();
     if (post) {
-      postToMarkdown(post, sourceId).then((md) => {
-        // 切源或关文后，忽略过期的结果
+      postToMarkdown(post, sourceId, categoryId).then((md) => {
         if (currentSource() !== sourceId || showPost()?.metadata.name !== post.metadata.name) return;
         const title = post.spec?.title ?? "Untitled";
         chat.setContext(
           `post:${post.metadata.name}`,
-          `[Context: 当前正在阅读文章。文章详细信息： "${title}"]\n\n${md}`,
+          `[Context: 当前正在阅读${activeCategory()?.label ?? "文章"}。详细信息： "${title}"]\n\n${md}`,
         );
       });
     } else {
-      // 回到首页 → 把文章列表作为上下文
       const items = posts()?.items;
       if (items && items.length > 0) {
+        const kind = activeCategory()?.label ?? "内容";
         const list = items
           .map(
             (p, i) =>
@@ -56,7 +90,7 @@ export function MainContent() {
           .join("\n");
         chat.setContext(
           "home",
-          `[Context: 当前在首页，文章列表如下]\n\n${list}`,
+          `[Context: 当前在首页，${kind}列表如下]\n\n${list}`,
         );
       }
     }
@@ -80,14 +114,12 @@ export function MainContent() {
         alignItems: "center",
         flexGrow: 3,
         gap: 0,
-        // backgroundColor: "#ffffff",
       }}
     >
       {/* ── 列表头 ── */}
       <box
         style={{
           width: "100%",
-
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
@@ -108,12 +140,12 @@ export function MainContent() {
         </text>
         <Show when={showPost() == null}>
           <text style={{ fg: theme.accent, attributes: TextAttributes.BOLD }}>
-            ✦ 文章列表
+            ✦ {activeCategory()?.label ?? "文章"}列表
           </text>
         </Show>
         <Show when={showPost() == null}>
           <text style={{ fg: theme.textMuted }}>
-            共 {posts()?.total ?? 0} 篇
+            共 {posts()?.total ?? 0} {activeCategory()?.unit ?? "篇"}
           </text>
         </Show>
         <Show when={showPost() != null}>
@@ -123,45 +155,75 @@ export function MainContent() {
           </text>
         </Show>
 
-        <text>{"[Ctrl+T] 主题切换"}</text>
+        <text>
+          {showCategoryColumn() ? "[ / ] 分类   [Ctrl+T] 主题" : "[Ctrl+T] 主题切换"}
+        </text>
       </box>
-      <Show when={showPost() != null}>
-        <PostDetail
-          handleClose={handleClosePost}
-          post={showPost() as ListedPostVo}
-          sourceId={currentSource()}
-        />
-      </Show>
-      <Show when={showPost() == null}>
-        {/* 3. 优先处理错误状态 */}
-        <Show
-          when={!posts.error}
-          fallback={
-            <text style={{ fg: theme.error || "#ff5555" }}>
-              {" "}
-              加载失败: {posts.error?.message || "未知网络错误"}
-            </text>
-          }
-        >
-          {/* 4. 处理正常加载与数据渲染 */}
-          <Show
-            when={!posts.loading && posts()}
-            fallback={
-              <text style={{ fg: theme.textMuted }}>
-                {" "}
-                正在从 ska-web 读取内容...
-              </text>
-            }
-          >
-            {(data) => (
-              <PostList
-                posts={data().items ?? []}
-                enterPost={handlePostClick}
-              />
-            )}
-          </Show>
+      <box
+        style={{
+          flexGrow: 1,
+          flexShrink: 1,
+          width: "100%",
+          height: "100%",
+          flexDirection: "row",
+          alignItems: "stretch",
+        }}
+      >
+        <Show when={showCategoryColumn()}>
+          <CategoryColumn categories={categories()} />
         </Show>
-      </Show>
+        <box
+          style={{
+            flexGrow: 1,
+            flexShrink: 1,
+            height: "100%",
+            flexDirection: "column",
+          }}
+        >
+          <Show when={showPost() != null}>
+            <PostDetail
+              handleClose={handleClosePost}
+              post={showPost() as ListedPostVo}
+              sourceId={currentSource()}
+              categoryId={currentCategory()}
+            />
+          </Show>
+          <Show when={showPost() == null}>
+            <Show
+              when={!posts.error}
+              fallback={
+                <text style={{ fg: theme.error || "#ff5555" }}>
+                  {" "}
+                  加载失败: {posts.error?.message || "未知网络错误"}
+                </text>
+              }
+            >
+              <Show
+                when={!posts.loading && posts()}
+                fallback={
+                  <text style={{ fg: theme.textMuted }}>
+                    {" "}
+                    正在从 ska-web 读取{activeCategory()?.label ?? "内容"}...
+                  </text>
+                }
+              >
+                {(data) => (
+                  <PostList
+                    posts={data().items ?? []}
+                    enterPost={handlePostClick}
+                    emptyText={`暂无${activeCategory()?.label ?? "内容"}`}
+                    onLeaveToCategories={
+                      categories().length > 0
+                        ? () => activateGroup("category")
+                        : undefined
+                    }
+                  />
+                )}
+              </Show>
+            </Show>
+          </Show>
+        </box>
+      </box>
     </box>
   );
 }

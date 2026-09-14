@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { getAdapter } from "./adapters";
-import type { ListedPostVoList } from "./types";
+import { CONTENT_CATEGORIES } from "./categories";
 
 // ── 工具定义 ────────────────────────────────────────────────────────
 
@@ -10,26 +10,35 @@ import type { ListedPostVoList } from "./types";
  */
 export const queryPostsTool = tool({
   description:
-    "查询 ska 博客的全部文章列表。当用户想要浏览文章列表、查看最新文章时使用此工具。返回结果中包含每篇文章的 name（slug）和 title，如果需要查看某篇文章的详细内容，请使用 queryPostByName 工具并传入对应的 name。",
+    "查询 ska 博客的全部文章与笔记列表。返回每篇的 category、name（slug）和 title；查看详情时用 queryPostByName 并传入对应 name。",
   inputSchema: z.object({}),
   execute: async () => {
     try {
       const adapter = getAdapter("master");
-      const result = await adapter.queryPosts({
-        page: 1,
-        size: 1000,
-      });
-      return {
-        success: true,
-        data: {
+      const categories = adapter.categories ?? CONTENT_CATEGORIES;
+      const groups = [];
+      for (const cat of categories) {
+        const result = await adapter.queryPosts({
+          page: 1,
+          size: 1000,
+          category: cat.id,
+        });
+        groups.push({
+          category: cat.id,
+          label: cat.label,
           total: result.total,
           items: result.items.map((item) => ({
+            category: cat.id,
             name: item.metadata.name,
             title: item.spec.title,
             publishTime: item.spec.publishTime,
             author: item.owner?.displayName ?? "未知作者",
           })),
-        },
+        });
+      }
+      return {
+        success: true,
+        data: { groups },
       };
     } catch (error) {
       return {
@@ -108,38 +117,58 @@ export const queryPostsTool = tool({
  */
 export const queryPostByNameTool = tool({
   description:
-    "根据文章的 metadata.name（slug，如 hello-world）查询单篇文章的完整信息。注意：此参数是文章的 slug，不是文章标题！请先用 queryPosts 获取文章列表，从中找到对应的 name 后再调用此工具。",
+    "根据 slug（如 hello-world）查询文章或笔记的完整信息。不是标题！请先用 queryPosts 拿到 name，可选传入 category（posts / notes）。",
   inputSchema: z.object({
-    name: z.string().describe("文章的 metadata.name / slug，例如 hello-world，绝对不是文章标题"),
+    name: z.string().describe("文章或笔记的 slug，例如 hello-world，绝对不是标题"),
+    category: z.string().optional().describe("可选分类 id，如 posts 或 notes"),
   }),
   execute: async (params) => {
     try {
       const adapter = getAdapter("master");
-      const post = await adapter.queryPostByName(params.name);
-      return {
-        success: true,
-        data: {
-          name: post.metadata.name,
-          title: post.spec?.title,
-          slug: post.spec?.slug,
-          publishTime: post.spec?.publishTime,
-          visible: post.spec?.visible,
-          excerpt: post.content?.raw
-            ? post.content.raw.substring(0, 500) + (post.content.raw.length > 500 ? "..." : "")
-            : "无摘要",
-          content: post.content?.content ?? post.content?.raw ?? "无内容",
-          author: post.owner?.displayName ?? "未知作者",
-          categories: post.categories?.map((c) => c.spec?.displayName ?? c.metadata.name) ?? [],
-          tags: post.tags?.map((t) => t.spec?.displayName ?? t.metadata.name) ?? [],
-          stats: post.stats
-            ? {
-                visits: post.stats.visit ?? 0,
-                comments: post.stats.comment ?? 0,
-                upvotes: post.stats.upvote ?? 0,
-              }
-            : null,
-        },
-      };
+      const categories = adapter.categories ?? CONTENT_CATEGORIES;
+      const order = params.category
+        ? [
+            ...categories.filter((c) => c.id === params.category),
+            ...categories.filter((c) => c.id !== params.category),
+          ]
+        : categories;
+
+      let lastError: unknown;
+      for (const cat of order) {
+        try {
+          const post = await adapter.queryPostByName(params.name, {
+            category: cat.id,
+          });
+          return {
+            success: true,
+            data: {
+              category: cat.id,
+              name: post.metadata.name,
+              title: post.spec?.title,
+              slug: post.spec?.slug,
+              publishTime: post.spec?.publishTime,
+              visible: post.spec?.visible,
+              excerpt: post.content?.raw
+                ? post.content.raw.substring(0, 500) + (post.content.raw.length > 500 ? "..." : "")
+                : "无摘要",
+              content: post.content?.content ?? post.content?.raw ?? "无内容",
+              author: post.owner?.displayName ?? "未知作者",
+              categories: post.categories?.map((c) => c.spec?.displayName ?? c.metadata.name) ?? [],
+              tags: post.tags?.map((t) => t.spec?.displayName ?? t.metadata.name) ?? [],
+              stats: post.stats
+                ? {
+                    visits: post.stats.visit ?? 0,
+                    comments: post.stats.comment ?? 0,
+                    upvotes: post.stats.upvote ?? 0,
+                  }
+                : null,
+            },
+          };
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError instanceof Error ? lastError : new Error("内容不存在");
     } catch (error) {
       return {
         success: false,

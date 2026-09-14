@@ -112,7 +112,7 @@ function AppContent({ name }: { name: string }) {
       }}
       title=" SKA-SITE://ROOT "
       titleAlignment="left"
-      bottomTitle="  Ctrl+T 主题   Ctrl+U 用户信息   ESC 返回/断开   Q/Ctrl+C 退出  "
+      bottomTitle="  [ / ] 分类   Tab 栏切换   Ctrl+T 主题   Ctrl+U 用户信息   ESC 返回/断开   Q/Ctrl+C 退出  "
       bottomTitleAlignment="center"
     >
       {/* <Header name={name} /> */}
@@ -163,7 +163,7 @@ function App({
             <DialogProvider>
               <KeyboardHandler />
               {/* 这里数组会影响初始焦点顺序 */}
-              <FocusProvider groups={["main", "sidebar"]}>
+              <FocusProvider groups={["main", "category", "sidebar"]}>
                 <AppContent name={name} />
               </FocusProvider>
             </DialogProvider>

@@ -202,14 +202,15 @@ export function createSkaWebClient(baseUrl = resolveSkaWebBaseUrl()) {
 
   return {
     origin,
-    listPosts: () =>
-      fetchAllPages<PostSummary>(origin, `${api}/posts`),
-    getPost: (slug: string) =>
-      getJson<PostDetail>(origin, `${api}/posts/${encodeURIComponent(slug)}`),
-    listNotes: () =>
-      fetchAllPages<PostSummary>(origin, `${api}/notes`),
-    getNote: (slug: string) =>
-      getJson<PostDetail>(origin, `${api}/notes/${encodeURIComponent(slug)}`),
+    listByPath: (listPath: string) =>
+      fetchAllPages<PostSummary>(origin, listPath.replace(/^\/+/, "")),
+    getByPath: (detailPath: string, slug: string) =>
+      getJson<PostDetail>(
+        origin,
+        detailPath
+          .replace(/^\/+/, "")
+          .replaceAll("{slug}", encodeURIComponent(slug)),
+      ),
     listFriends: async () => {
       const res = await getJson<FriendsResponse>(origin, `${api}/friends`);
       return res.items;

@@ -21,6 +21,8 @@ import { usePostContext } from "../context/PostContext";
 interface PostListProps {
   posts: ListedPostVo[];
   enterPost: (post: ListedPostVo) => void;
+  emptyText?: string;
+  onLeaveToCategories?: () => void;
 }
 
 /** 格式化时间为 HH:mm */
@@ -88,6 +90,13 @@ export function PostList(props: PostListProps) {
     // 非 main 组激活时，不处理列表键盘事件
     if (!isActive()) return;
     const count = props.posts.length;
+    if (
+      props.onLeaveToCategories &&
+      (key.name === "left" || key.name === "h")
+    ) {
+      props.onLeaveToCategories();
+      return;
+    }
     if (count === 0) return;
 
     let newIdx = focusedIndex();
@@ -307,7 +316,7 @@ export function PostList(props: PostListProps) {
                 padding: 4,
               }}
             >
-              <text style={{ fg: theme.textMuted }}>暂无文章</text>
+              <text style={{ fg: theme.textMuted }}>{props.emptyText ?? "暂无文章"}</text>
             </box>
           )}
         </box>

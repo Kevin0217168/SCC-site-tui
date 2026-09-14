@@ -11,6 +11,7 @@ type PostDetailProps = {
   post: ListedPostVo;
   handleClose: () => void;
   sourceId?: string;
+  categoryId?: string;
 };
 
 export default function PostDetail(props: PostDetailProps) {
@@ -19,11 +20,16 @@ export default function PostDetail(props: PostDetailProps) {
   const { isActive } = useFocusGroup("main");
   let scrollRef: any = null;
 
-  const [markdown] = createResource<string>(async () => {
-    var sb = await postToMarkdown(post, props.sourceId);
-    // console.log("markdown:", sb);
-    return sb;
-  });
+  const [markdown] = createResource(
+    () => ({
+      name: props.post.metadata.name,
+      sourceId: props.sourceId,
+      categoryId: props.categoryId,
+    }),
+    async ({ sourceId, categoryId }) => {
+      return postToMarkdown(props.post, sourceId, categoryId);
+    },
+  );
 
   // const syntaxStyle = SyntaxStyle.fromStyles({
   //   keyword: { fg: parseColor("#FF7B72"), bold: true },
