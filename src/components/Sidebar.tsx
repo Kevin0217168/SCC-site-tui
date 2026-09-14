@@ -3,13 +3,19 @@ import { Show } from "solid-js";
 import { useTheme } from "../context/ThemeContext";
 import { usePostContext } from "../context/PostContext";
 import { AIChat } from "./AIChat";
+import { CategoryColumn } from "./CategoryColumn";
 import { formatDate } from "../lib/date";
 import { useSession } from "../context/SessionContext";
 import { useFocusGroup } from "../context/FocusContext";
 import { getBlogSourceList } from "../api/adapters";
+
+const aiChatEnabled = () =>
+  !!(process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL);
+
 export function Sidebar({ width }: { width: number | `${number}%` }) {
   const { theme } = useTheme();
-  const { currentSource, setCurrentSource, showPost, setShowPost } = usePostContext();
+  const { currentSource, setCurrentSource, showPost, setShowPost } =
+    usePostContext();
   const session = useSession();
   const blogSources = getBlogSourceList();
   const { isActive } = useFocusGroup("sidebar");
@@ -48,6 +54,7 @@ export function Sidebar({ width }: { width: number | `${number}%` }) {
           <text>当前用户：{session.username}</text>
         </Show>
       </box>
+      <CategoryColumn />
       <box
         style={{
           border: true,
@@ -72,17 +79,19 @@ export function Sidebar({ width }: { width: number | `${number}%` }) {
           </text>
         ))}
       </box>
-      <box
-        style={{
-          border: true,
-          borderColor: isActive() ? "#58A6FF" : theme.text,
-        }}
-        title=" AI Chat "
-        titleColor={isActive() ? "#58A6FF" : "#58A6FF"}
-        flexShrink={1}
-      >
-        <AIChat />
-      </box>
+      <Show when={aiChatEnabled()}>
+        <box
+          style={{
+            border: true,
+            borderColor: isActive() ? "#58A6FF" : theme.text,
+          }}
+          title=" AI Chat "
+          titleColor={isActive() ? "#58A6FF" : "#58A6FF"}
+          flexShrink={1}
+        >
+          <AIChat />
+        </box>
+      </Show>
     </box>
   );
 }

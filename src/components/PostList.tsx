@@ -92,7 +92,7 @@ export function PostList(props: PostListProps) {
     const count = props.posts.length;
     if (
       props.onLeaveToCategories &&
-      (key.name === "left" || key.name === "h")
+      (key.name === "right" || key.name === "l")
     ) {
       props.onLeaveToCategories();
       return;

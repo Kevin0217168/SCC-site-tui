@@ -7,24 +7,29 @@ import { useFocusGroup, useFocusManager } from "../context/FocusContext";
 import { useDialog } from "../ui/dialog";
 import { usePostContext } from "../context/PostContext";
 import {
+  CONTENT_CATEGORIES,
   contentCategoryIndex,
-  type ContentCategory,
 } from "../api/categories";
 
-interface CategoryColumnProps {
-  categories: readonly ContentCategory[];
-}
+const MASTER_SOURCE = "master";
 
-export function CategoryColumn(props: CategoryColumnProps) {
+/** 右侧栏「友链」上方的分类块，样式与友链一致。 */
+export function CategoryColumn() {
   const { theme } = useTheme();
   const renderer = useRenderer();
   const dialog = useDialog();
   const { activateGroup, _setFocusedIndex, activeGroup } = useFocusManager();
   const { focusedIndex, isActive } = useFocusGroup("category");
-  const { currentCategory, setCurrentCategory, showPost, setShowPost } =
-    usePostContext();
+  const {
+    currentSource,
+    setCurrentSource,
+    currentCategory,
+    setCurrentCategory,
+    showPost,
+    setShowPost,
+  } = usePostContext();
 
-  const cats = () => props.categories;
+  const cats = () => CONTENT_CATEGORIES;
 
   createEffect(() => {
     _setFocusedIndex("category", contentCategoryIndex(currentCategory()));
@@ -34,6 +39,10 @@ export function CategoryColumn(props: CategoryColumnProps) {
     const cat = cats()[idx];
     if (!cat) return;
     _setFocusedIndex("category", idx);
+    if (currentSource() !== MASTER_SOURCE) {
+      setShowPost(null);
+      setCurrentSource(MASTER_SOURCE);
+    }
     if (currentCategory() !== cat.id) {
       setShowPost(null);
       setCurrentCategory(cat.id);
@@ -44,15 +53,21 @@ export function CategoryColumn(props: CategoryColumnProps) {
   function cycle(delta: number) {
     const list = cats();
     if (list.length === 0) return;
-    const next = (contentCategoryIndex(currentCategory()) + delta + list.length) % list.length;
+    const next =
+      (contentCategoryIndex(currentCategory()) + delta + list.length) %
+      list.length;
     selectIndex(next);
   }
 
-  const handleKey = (key: { name?: string; ctrl?: boolean; sequence?: string }) => {
+  const handleKey = (key: {
+    name?: string;
+    ctrl?: boolean;
+    sequence?: string;
+  }) => {
     if (key.ctrl) return;
     if (dialog.stack.length > 0) return;
-    if (showPost() != null) return;
     if (activeGroup() === "sidebar") return;
+    if (showPost() != null && !isActive()) return;
 
     const name = key.name || key.sequence || "";
     if (name === "[" || name === "{") {
@@ -85,8 +100,8 @@ export function CategoryColumn(props: CategoryColumnProps) {
     } else if (
       name === "return" ||
       name === "enter" ||
-      name === "right" ||
-      name === "l"
+      name === "left" ||
+      name === "h"
     ) {
       selectIndex(newIdx, true);
     }
@@ -99,52 +114,52 @@ export function CategoryColumn(props: CategoryColumnProps) {
     renderer.keyInput.removeListener("keypress", handleKey);
   });
 
+  const onMaster = () => currentSource() === MASTER_SOURCE;
+
   return (
     <box
+      title=" 分类 "
+      titleColor={isActive() ? theme.accent : "#5cb66b"}
       style={{
+        border: true,
+        borderColor: isActive() ? theme.accent : theme.text,
         flexShrink: 0,
-        width: 16,
-        flexDirection: "column",
-        height: "100%",
-        padding: 0,
-        margin: 0,
+        paddingX: 1,
       }}
     >
-      <box
-        title=" 分类 "
-        titleColor={isActive() ? theme.accent : "#5cb66b"}
+      <For each={cats()}>
+        {(cat, index) => {
+          const selected = () => onMaster() && currentCategory() === cat.id;
+          const focused = () => isActive() && focusedIndex() === index();
+          return (
+            <text
+              style={{
+                alignSelf: "center",
+                fg: focused()
+                  ? theme.accent
+                  : selected()
+                    ? "#5cb66b"
+                    : theme.text,
+                attributes: selected() ? TextAttributes.BOLD : undefined,
+              }}
+              onMouseDown={() => selectIndex(index())}
+            >
+              {selected()
+                ? `▸ ${index() + 1} ${cat.label}`
+                : `  ${index() + 1} ${cat.label}`}
+            </text>
+          );
+        }}
+      </For>
+      <text
         style={{
-          border: true,
-          borderColor: isActive() ? theme.accent : theme.borderSubtle,
-          flexGrow: 1,
-          paddingX: 1,
+          alignSelf: "center",
+          fg: theme.textMuted,
+          attributes: TextAttributes.DIM,
         }}
       >
-        <For each={cats()}>
-          {(cat, index) => {
-            const selected = () => currentCategory() === cat.id;
-            const focused = () => isActive() && focusedIndex() === index();
-            return (
-              <text
-                style={{
-                  fg: focused()
-                    ? theme.accent
-                    : selected()
-                      ? "#5cb66b"
-                      : theme.text,
-                  attributes: selected() ? TextAttributes.BOLD : undefined,
-                }}
-                onMouseDown={() => selectIndex(index(), true)}
-              >
-                {selected() ? `▸ ${index() + 1} ${cat.label}` : `  ${index() + 1} ${cat.label}`}
-              </text>
-            );
-          }}
-        </For>
-        <text style={{ fg: theme.textMuted, attributes: TextAttributes.DIM }}>
-          [/] 切换
-        </text>
-      </box>
+        [/] 切换
+      </text>
     </box>
   );
 }

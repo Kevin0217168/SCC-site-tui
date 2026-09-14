@@ -2,7 +2,6 @@ import { watch, utimesSync } from "node:fs";
 import { resolve } from "node:path";
 import { createServer } from "@opentui/ssh";
 import { render, useTerminalDimensions } from "@opentui/solid";
-import { Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { FocusProvider } from "./context/FocusContext"; // 导入你刚才写的代码
 import { getTreeSitterClient, addDefaultParsers } from "@opentui/core";
@@ -128,18 +127,7 @@ function AppContent({ name }: { name: string }) {
         {/* <Sidebar width={sidebarWidth} /> */}
 
         <MainContent />
-        {/* <Sidebar width={sidebarWidth} /> */}
-        <Show
-          when={
-            !!(
-              process.env.AI_BASE_URL &&
-              process.env.AI_API_KEY &&
-              process.env.AI_MODEL
-            )
-          }
-        >
-          <Sidebar width="30%" />
-        </Show>
+        <Sidebar width="30%" />
       </box>
       {/* <ShortcutBar /> */}
     </box>

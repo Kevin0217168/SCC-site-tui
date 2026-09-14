@@ -2,7 +2,6 @@
 import { createResource, createEffect, Show, createMemo } from "solid-js";
 import { useTheme } from "../context/ThemeContext";
 import { PostList } from "./PostList";
-import { CategoryColumn } from "./CategoryColumn";
 import { getAdapter } from "../api/adapters";
 import { GifPlayer } from "./GifPlayer";
 // @ts-ignore
@@ -43,9 +42,6 @@ export function MainContent() {
   const activeCategory = createMemo(() =>
     categories().length > 0 ? getContentCategory(currentCategory()) : undefined,
   );
-
-  const showCategoryColumn = () =>
-    showPost() == null && categories().length > 0;
 
   const [posts] = createResource(
     () => ({ sourceId: currentSource(), category: currentCategory() }),
@@ -155,75 +151,46 @@ export function MainContent() {
           </text>
         </Show>
 
-        <text>
-          {showCategoryColumn() ? "[ / ] 分类   [Ctrl+T] 主题" : "[Ctrl+T] 主题切换"}
-        </text>
+        <text>{"[ / ] 分类   [Ctrl+T] 主题"}</text>
       </box>
-      <box
-        style={{
-          flexGrow: 1,
-          flexShrink: 1,
-          width: "100%",
-          height: "100%",
-          flexDirection: "row",
-          alignItems: "stretch",
-        }}
-      >
-        <Show when={showCategoryColumn()}>
-          <CategoryColumn categories={categories()} />
-        </Show>
-        <box
-          style={{
-            flexGrow: 1,
-            flexShrink: 1,
-            height: "100%",
-            flexDirection: "column",
-          }}
+      <Show when={showPost() != null}>
+        <PostDetail
+          handleClose={handleClosePost}
+          post={showPost() as ListedPostVo}
+          sourceId={currentSource()}
+          categoryId={currentCategory()}
+        />
+      </Show>
+      <Show when={showPost() == null}>
+        <Show
+          when={!posts.error}
+          fallback={
+            <text style={{ fg: theme.error || "#ff5555" }}>
+              {" "}
+              加载失败: {posts.error?.message || "未知网络错误"}
+            </text>
+          }
         >
-          <Show when={showPost() != null}>
-            <PostDetail
-              handleClose={handleClosePost}
-              post={showPost() as ListedPostVo}
-              sourceId={currentSource()}
-              categoryId={currentCategory()}
-            />
+          <Show
+            when={!posts.loading && posts()}
+            fallback={
+              <text style={{ fg: theme.textMuted }}>
+                {" "}
+                正在从 ska-web 读取{activeCategory()?.label ?? "内容"}...
+              </text>
+            }
+          >
+            {(data) => (
+              <PostList
+                posts={data().items ?? []}
+                enterPost={handlePostClick}
+                emptyText={`暂无${activeCategory()?.label ?? "内容"}`}
+                onLeaveToCategories={() => activateGroup("category")}
+              />
+            )}
           </Show>
-          <Show when={showPost() == null}>
-            <Show
-              when={!posts.error}
-              fallback={
-                <text style={{ fg: theme.error || "#ff5555" }}>
-                  {" "}
-                  加载失败: {posts.error?.message || "未知网络错误"}
-                </text>
-              }
-            >
-              <Show
-                when={!posts.loading && posts()}
-                fallback={
-                  <text style={{ fg: theme.textMuted }}>
-                    {" "}
-                    正在从 ska-web 读取{activeCategory()?.label ?? "内容"}...
-                  </text>
-                }
-              >
-                {(data) => (
-                  <PostList
-                    posts={data().items ?? []}
-                    enterPost={handlePostClick}
-                    emptyText={`暂无${activeCategory()?.label ?? "内容"}`}
-                    onLeaveToCategories={
-                      categories().length > 0
-                        ? () => activateGroup("category")
-                        : undefined
-                    }
-                  />
-                )}
-              </Show>
-            </Show>
-          </Show>
-        </box>
-      </box>
+        </Show>
+      </Show>
     </box>
   );
 }
