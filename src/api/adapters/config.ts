@@ -1,33 +1,38 @@
 import type { BlogAdapter } from "./types";
-import { createHaloAdapter } from "./halo-adapter";
+import { createSkaWebAdapter } from "./ska-web-adapter";
 import { createRssAdapter } from "./rss-adapter";
+import { DEFAULT_SKA_WEB_BASE_URL, resolveSkaWebBaseUrl } from "../ska-web";
+import type { SkaWebResource } from "../ska-web";
 
 export interface BlogSourceConfig {
   id: string;
   name: string;
-  type: "halo" | "rss";
+  type: "ska-web" | "rss";
   config: Record<string, string>;
+}
+
+function skaWebSource(
+  id: string,
+  name: string,
+  resource: SkaWebResource,
+): BlogSourceConfig {
+  return {
+    id,
+    name,
+    type: "ska-web",
+    config: {
+      baseUrl: resolveSkaWebBaseUrl(),
+      resource,
+    },
+  };
 }
 
 /** 所有支持的博客源配置 */
 export const BLOG_SOURCES: BlogSourceConfig[] = [
-  {
-    id: "master",
-    name: "回到主站",
-    type: "halo",
-    config: {
-      baseUrl: process.env.HALO_BASE_URL ?? "http://localhost:8090",
-      auth: process.env.HALO_AUTH ?? "",
-    },
-  },
-  {
-    id: "none",
-    name: "none",
-    type: "halo",
-    config: {
-      baseUrl: "https://none-blog.top",
-    },
-  },
+  skaWebSource("master", "回到主站", "posts"),
+  skaWebSource("notes", "笔记", "notes"),
+  skaWebSource("friends", "友链", "friends"),
+  skaWebSource("about", "关于", "about"),
   {
     id: "rss-qaqbuyan",
     name: "qaq-buyan",
@@ -49,10 +54,10 @@ export const BLOG_SOURCES: BlogSourceConfig[] = [
 
 /** 根据配置创建 adapter 实例 */
 export function createAdapterFromConfig(source: BlogSourceConfig): BlogAdapter {
-  if (source.type === "halo") {
-    return createHaloAdapter(source.id, source.name, {
-      baseUrl: source.config.baseUrl ?? "",
-      auth: source.config.auth,
+  if (source.type === "ska-web") {
+    return createSkaWebAdapter(source.id, source.name, {
+      baseUrl: source.config.baseUrl || DEFAULT_SKA_WEB_BASE_URL,
+      resource: (source.config.resource as SkaWebResource) || "posts",
     });
   }
   return createRssAdapter(source.id, source.name, {

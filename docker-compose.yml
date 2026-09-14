@@ -11,3 +11,4 @@ services:
       - ./.data:/app/.data
     environment:
       - PORT=2222
+      - SKA_WEB_BASE_URL=${SKA_WEB_BASE_URL:-https://ska-web-git-dev-sakuraofficials-projects.vercel.app}

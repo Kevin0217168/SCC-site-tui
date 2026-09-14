@@ -1,4 +1,4 @@
-// 2. 这里的定义对应 OpenAPI 的 ListedPostVoList 结构（供 TypeScript 参考）
+// TUI 视图模型（沿用原 Halo VO 字段名，由各 adapter 映射而来）
 export interface QueryPostsParams {
   page?: number;
   size?: number;
@@ -7,7 +7,7 @@ export interface QueryPostsParams {
   sort?: string[];
 }
 
-// 接口返回的整体列表结构（对应 OpenAPI 的 ListedPostVoList）
+// 列表结构（字段名沿用原 Halo ListedPostVoList，供 UI 使用）
 export interface ListedPostVoList {
   first: boolean;
   hasNext: boolean;
@@ -92,10 +92,11 @@ export interface PostStatus {
   observedVersion?: number;
 }
 
-// ContentVo（内容）
+// ContentVo（内容）。ska-web 已是 markdown；RSS 等源可能仍是 html。
 export interface ContentVo {
   raw?: string;
   content?: string;
+  format?: "markdown" | "html";
 }
 
 // ContributorVo（贡献者/作者）

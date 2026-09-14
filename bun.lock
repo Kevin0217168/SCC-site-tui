@@ -11,7 +11,7 @@
         "@opentui/ssh": "^0.4.2",
         "@vectorize-io/hindsight-ai-sdk": "^0.5.1",
         "@vectorize-io/hindsight-client": "^0.8.4",
-        "ai": "^7.0.8",
+        "ai": "^7.0.9",
         "drizzle-orm": "1.0.0-rc.3",
         "jimp": "^1.6.1",
         "ky": "^2.0.2",

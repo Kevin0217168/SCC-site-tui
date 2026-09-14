@@ -10,7 +10,7 @@ import type { ListedPostVoList } from "./types";
  */
 export const queryPostsTool = tool({
   description:
-    "查询 ska 博客的全部文章列表。当用户想要浏览文章列表、查看最新文章时使用此工具。返回结果中包含每篇文章的 name（UUID）和 title，如果需要查看某篇文章的详细内容，请使用 queryPostByName 工具并传入对应的 name。",
+    "查询 ska 博客的全部文章列表。当用户想要浏览文章列表、查看最新文章时使用此工具。返回结果中包含每篇文章的 name（slug）和 title，如果需要查看某篇文章的详细内容，请使用 queryPostByName 工具并传入对应的 name。",
   inputSchema: z.object({}),
   execute: async () => {
     try {
@@ -108,9 +108,9 @@ export const queryPostsTool = tool({
  */
 export const queryPostByNameTool = tool({
   description:
-    "根据文章的 metadata.name（UUID 格式，如 019edc19-47fe-713a-a9f9-c85f4c5581f2）查询单篇文章的完整信息。注意：此参数是文章的 name（UUID），不是文章标题！请先用 queryPosts 获取文章列表，从中找到对应的 name 后再调用此工具。",
+    "根据文章的 metadata.name（slug，如 hello-world）查询单篇文章的完整信息。注意：此参数是文章的 slug，不是文章标题！请先用 queryPosts 获取文章列表，从中找到对应的 name 后再调用此工具。",
   inputSchema: z.object({
-    name: z.string().describe("文章的 metadata.name，必须是 UUID 格式，如 019edc19-47fe-713a-a9f9-c85f4c5581f2，绝对不是文章标题"),
+    name: z.string().describe("文章的 metadata.name / slug，例如 hello-world，绝对不是文章标题"),
   }),
   execute: async (params) => {
     try {

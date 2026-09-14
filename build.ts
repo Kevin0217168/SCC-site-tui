@@ -13,7 +13,8 @@ const result = await Bun.build({
   plugins: [plugin],
   outdir: resolve(dir, "dist"),
   target: "bun",
-  external: ["@opentui/core", "@opentui/core-*"],
+  // ssh2 optionally loads this native addon; bun cannot bundle a missing .node
+  external: ["@opentui/core", "@opentui/core-*", "cpu-features"],
   define: {},
   minify:true,
 })

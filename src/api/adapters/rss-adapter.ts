@@ -124,6 +124,7 @@ function parseRssItems(id: string, name: string, xml: string): types.PostVo[] {
       content: {
         raw: contentRaw,
         content: contentRaw,
+        format: "html",
       },
       owner: {
         metadata: { name: author },
@@ -294,7 +295,7 @@ export function createRssAdapter(id: string, name: string, config: RssAdapterCon
       if (link) {
         if (config.fetchFullContent) {
           const fullHtml = await fetchArticleHtml(link, id, config.articleSelector);
-          post.content = { raw: fullHtml, content: fullHtml };
+          post.content = { raw: fullHtml, content: fullHtml, format: "html" };
         }
         // 不需要 fetchFullContent 的情况（如 haoyn231），content 已在 RSS 中填充
       }

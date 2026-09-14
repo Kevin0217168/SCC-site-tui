@@ -149,7 +149,7 @@ export function MainContent() {
             fallback={
               <text style={{ fg: theme.textMuted }}>
                 {" "}
-                正在从 Halo 读取文章列表中...
+                正在从 ska-web 读取内容...
               </text>
             }
           >

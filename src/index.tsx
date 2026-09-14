@@ -225,7 +225,7 @@ const server = createServer({
 
 // ── 启动诊断：打印环境变量与功能启用状态 ───────────────────────────
 const envStatus = {
-  HALO_BASE_URL: process.env.HALO_BASE_URL ?? "(未配置)",
+  SKA_WEB_BASE_URL: process.env.SKA_WEB_BASE_URL ?? "(默认 ska-web dev)",
   HINDSIGHT_API_URL: process.env.HINDSIGHT_API_URL ?? "(未配置)",
   AI_BASE_URL: process.env.AI_BASE_URL ?? "(未配置)",
   AI_API_KEY: process.env.AI_API_KEY ? "****" : "(未配置)",

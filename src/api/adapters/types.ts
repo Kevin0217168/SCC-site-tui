@@ -8,7 +8,7 @@ export interface QueryPostsParams {
 export interface BlogAdapter {
   id: string;
   name: string;
-  type: "halo" | "rss";
+  type: "ska-web" | "rss";
   queryPosts(params?: QueryPostsParams): Promise<ListedPostVoList>;
   queryPostByName(name: string): Promise<PostVo>;
 }
