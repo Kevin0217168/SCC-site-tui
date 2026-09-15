@@ -132,12 +132,19 @@ export function PostList(props: PostListProps) {
   });
 
   return (
-    <box>
+    <box
+      style={{
+        width: "100%",
+        flexGrow: 1,
+        flexShrink: 1,
+      }}
+    >
       <scrollbox
         ref={(r) => (scrollboxRef = r)}
         scrollAcceleration={fastScroll}
         style={{
-          flexGrow: 0,
+          width: "100%",
+          flexGrow: 1,
           flexShrink: 1,
           height: "100%",
           flexDirection: "row",
@@ -148,8 +155,9 @@ export function PostList(props: PostListProps) {
           scrollY: true,
         }}
         contentOptions={{
-          flexGrow: 0,
-          minWidth: "0%",
+          width: "100%",
+          flexGrow: 1,
+          minWidth: "100%",
         }}
         // verticalScrollbarOptions={{
         //   trackOptions: {
@@ -160,6 +168,7 @@ export function PostList(props: PostListProps) {
       >
         <box
           style={{
+            width: "100%",
             flexDirection: "column",
             alignItems: "stretch",
             justifyContent: "flex-start",
@@ -316,7 +325,9 @@ export function PostList(props: PostListProps) {
                 padding: 4,
               }}
             >
-              <text style={{ fg: theme.textMuted }}>{props.emptyText ?? "暂无文章"}</text>
+              <text style={{ fg: theme.textMuted }}>
+                {props.emptyText ?? "暂无文章"}
+              </text>
             </box>
           )}
         </box>
