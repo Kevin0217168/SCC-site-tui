@@ -1,14 +1,9 @@
 <div align="center">
 
-# SKA-SITE-TUI
+# SKA-WEB-TUI
 
 **基于 OpenTUI/Solid.JS 的终端 UI 博客服务端，内置 AI 聊天助手，通过 SSH 协议对外提供服务。**
 
-**内容来自 [ska-web](https://github.com/sAkuraOfficial/ska-web) 的公开 JSON API v1（[sakura-io.com](https://www.sakura-io.com) / ska-web 预览环境），不再对接 Halo CMS。**
-
-```bash
-ssh -p 2222 blog.sakuraofficial.site
-```
 
 ```bash
 ssh -p 2222 13.229.180.39
@@ -24,6 +19,11 @@ ssh -p 2222 13.229.180.39
 
 https://github.com/user-attachments/assets/2b6283c4-a1fd-42d4-b4c7-f276a1d8579b
 
+## 分支选择
+
+**master**：作者的个人博客专属适配
+
+**halo-version**：halo博客适配
 
 
 ## 快速开始
@@ -52,18 +52,6 @@ ssh -p 2222 user@your-server
 ## 环境变量
 
 参考 `.env.example` 文件，创建 `.env` 文件。
-
-内容源默认指向 ska-web `dev` 预览：
-
-```
-SKA_WEB_BASE_URL=https://ska-web-git-dev-sakuraofficials-projects.vercel.app
-```
-
-TUI 会请求 `{SKA_WEB_BASE_URL}/api/v1`：文章 `/posts`、笔记 `/notes`、关于 `/profile`。详情正文已是 markdown，无需 HTML 转换。列表按 cursor 分页，会拉完全部条目。
-
-主站右侧栏在「友链」上方有 **分类** 块（文章 / 笔记），由 `src/api/categories.ts` 注册表驱动，以后加分类只需追加一项。快捷键：`[` `]` 切换分类，`l` / `→` 从列表进入分类栏，`h` / `←` / `Enter` 回到列表，`Tab` 在列表、分类、AI 之间循环。侧栏「友链」列出硬编码博客源（回到主站、关于、RSS 友站），不从 `/api/v1/friends` 拉目录。
-
-API 契约见 ska-web 仓库 `docs/public-api.md`（`dev` 分支）。生产站 `https://www.sakura-io.com` 上的公开 API 以实际部署为准；当前 Expo / 本 TUI 使用上述预览地址。
 
 ## 技术栈
 
