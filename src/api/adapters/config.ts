@@ -30,7 +30,6 @@ function skaWebSource(
 /** 所有支持的博客源配置。主站文章/笔记由分类栏切换，不占友链位。 */
 export const BLOG_SOURCES: BlogSourceConfig[] = [
   skaWebSource("master", "回到主站", "posts"),
-  skaWebSource("friends", "友链", "friends"),
   skaWebSource("about", "关于", "about"),
   {
     id: "rss-qaqbuyan",

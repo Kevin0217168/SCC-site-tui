@@ -3,7 +3,6 @@ import type { BlogAdapter, QueryPostParams, QueryPostsParams } from "./types";
 import { readCache, writeCache } from "./cache";
 import {
   createSkaWebClient,
-  type Friend,
   type PostDetail,
   type PostSummary,
   type Profile,
@@ -103,45 +102,6 @@ function detailToPostVo(item: PostDetail, author: string): types.PostVo {
   return base;
 }
 
-function friendToPostVo(friend: Friend): types.PostVo {
-  const description = friend.description?.trim() || "暂无简介";
-  const markdown = [
-    `# ${friend.name}`,
-    "",
-    description,
-    "",
-    `[${friend.url}](${friend.url})`,
-  ].join("\n");
-
-  return {
-    metadata: {
-      name: friend.id,
-      creationTimestamp: friend.updatedAt,
-    },
-    spec: {
-      title: friend.name,
-      slug: friend.id,
-      cover: friend.avatarUrl ?? undefined,
-      deleted: false,
-      publish: true,
-      publishTime: friend.updatedAt,
-      pinned: false,
-      allowComment: false,
-      visible: "PUBLIC",
-      priority: friend.sortOrder,
-      excerpt: { autoGenerate: false, raw: description },
-    },
-    status: {
-      phase: "PUBLISHED",
-      permalink: friend.url,
-      excerpt: description,
-      lastModifyTime: friend.updatedAt,
-    },
-    content: markdownContent(markdown),
-    owner: ownerFrom(friend.name),
-  };
-}
-
 function profileToPostVo(profile: Profile): types.PostVo {
   const bio = profile.bio.filter(Boolean).join("\n\n");
   const links = profile.links
@@ -235,10 +195,6 @@ async function loadCatalog(
   resource: SkaWebResource,
   category?: ContentCategory,
 ): Promise<types.PostVo[]> {
-  if (resource === "friends") {
-    const friends = await client.listFriends();
-    return friends.map(friendToPostVo);
-  }
   if (resource === "about") {
     const profile = await client.getProfile();
     return [profileToPostVo(profile)];
@@ -271,7 +227,7 @@ function refreshCatalog(
 }
 
 function isContentResource(resource: SkaWebResource): boolean {
-  return resource !== "friends" && resource !== "about";
+  return resource !== "about";
 }
 
 export function createSkaWebAdapter(

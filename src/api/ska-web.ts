@@ -68,20 +68,6 @@ export interface CursorPage<T> {
   limit: number;
 }
 
-export interface Friend {
-  id: string;
-  name: string;
-  url: string;
-  description: string | null;
-  avatarUrl: string | null;
-  sortOrder: number;
-  updatedAt: string;
-}
-
-export interface FriendsResponse {
-  items: Friend[];
-}
-
 export interface ProfileLink {
   label: string;
   href: string;
@@ -113,7 +99,7 @@ export interface Profile {
   updatedAt: string;
 }
 
-export type SkaWebResource = "posts" | "notes" | "friends" | "about";
+export type SkaWebResource = "posts" | "notes" | "about";
 
 type CacheEntry = { etag: string; data: unknown };
 
@@ -211,10 +197,6 @@ export function createSkaWebClient(baseUrl = resolveSkaWebBaseUrl()) {
           .replace(/^\/+/, "")
           .replaceAll("{slug}", encodeURIComponent(slug)),
       ),
-    listFriends: async () => {
-      const res = await getJson<FriendsResponse>(origin, `${api}/friends`);
-      return res.items;
-    },
     getProfile: () => getJson<Profile>(origin, `${api}/profile`),
   };
 }
