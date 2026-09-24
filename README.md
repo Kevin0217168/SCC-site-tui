@@ -6,12 +6,12 @@
 
 
 ```bash
-ssh -p 2222 13.229.180.39
+ssh 111.229.10.239        # 部署在 MintServer-SH，默认监听 22 端口
 ```
 
-![License](https://www.shieldcn.dev/github/license/sakuraofficial/ska-site-tui.svg?variant=ghost&size=sm) 
+![License](https://www.shieldcn.dev/github/license/Kevin0217168/SCC-site-tui.svg?variant=ghost&size=sm) 
 
-![Stars](https://www.shieldcn.dev/github/stars/sakuraofficial/ska-site-tui.svg?variant=secondary&size=sm) ![Commit](https://www.shieldcn.dev/github/last-commit/sakuraofficial/ska-site-tui.svg?variant=secondary&size=sm) ![CI](https://www.shieldcn.dev/github/ci/sakuraofficial/ska-site-tui.svg?variant=secondary&size=sm)
+![Stars](https://www.shieldcn.dev/github/stars/Kevin0217168/SCC-site-tui.svg?variant=secondary&size=sm) ![Commit](https://www.shieldcn.dev/github/last-commit/Kevin0217168/SCC-site-tui.svg?variant=secondary&size=sm) ![CI](https://www.shieldcn.dev/github/ci/Kevin0217168/SCC-site-tui.svg?variant=secondary&size=sm)
 
 </div>
 
@@ -44,10 +44,32 @@ bun run build
 ### 连接
 
 ```bash
-ssh -p 2222 user@your-server
+ssh -p <PORT> user@your-server   # PORT 默认 2222，部署在 MintServer-SH 时是 22
 ```
 
-> 任意用户名即可，无需密码。
+> 默认任意用户名即可，无需密码 —— 安全影响见下方「安全提示」。
+
+### 部署到服务器
+
+完整流程见 [`docs/deploy.md`](docs/deploy.md)：CI 构建 + SSH 推送、
+多人协作与分支保护、墙内网络（GitHub 不可达）适配、排查清单。
+写作流程见 [`docs/local-content.md`](docs/local-content.md)。
+
+### 安全提示
+
+默认 `SSH_AUTH=open`，**任何能连到该端口的人都会直接拿到一个会话**，
+并可以使用你在 `.env` 里配置的 AI 额度。本地开发无所谓；一旦暴露到公网
+（尤其监听 22 端口时）请务必改成密钥认证：
+
+```ini
+# .env
+SSH_AUTH=publickey
+# SSH_AUTHORIZED_KEYS=/home/mint/.ssh/authorized_keys   # 默认 ~/.ssh/authorized_keys
+# SSH_IDLE_TIMEOUT=10m                                   # 闲置自动断开
+```
+
+可选值：`open`（不认证）/ `publickey`（按公钥名单放行）/ `anykey`
+（任何持有 SSH 私钥的客户端都能进，可挡掉无脑扫描器）。
 
 ## 环境变量
 

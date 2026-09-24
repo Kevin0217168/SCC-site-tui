@@ -171,11 +171,14 @@ sync_units() {
   [[ -d deploy ]] || { c_warn "没有 deploy/ 目录，跳过服务定义同步"; return 0; }
 
   mkdir -p "$UNIT_DIR"
-  local changed=0
+  local changed=0 unit target rendered
   for unit in deploy/ska-*.service; do
-    local target="$UNIT_DIR/$(basename "$unit")"
-    if ! cmp -s "$unit" "$target"; then
-      cp "$unit" "$target"
+    [[ -f "$unit" ]] || continue
+    target="$UNIT_DIR/$(basename "$unit")"
+    # @PROJECT_DIR@ 占位符替换为实际绝对路径，仓库可 checkout 到任意目录
+    rendered="$(sed "s|@PROJECT_DIR@|$PROJECT_DIR|g" "$unit")"
+    if [[ ! -f "$target" ]] || ! printf '%s\n' "$rendered" | cmp -s - "$target"; then
+      printf '%s\n' "$rendered" > "$target"
       changed=1
     fi
   done
@@ -198,6 +201,12 @@ content_api_port() {
   echo "${port:-8787}"
 }
 
+tui_port() {
+  local port
+  port="$(grep -E '^PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '[:space:]')"
+  echo "${port:-2222}"
+}
+
 restart_services() {
   c_info "重启服务"
   systemctl --user restart "${SERVICES[@]}"
@@ -217,11 +226,12 @@ wait_for_port() {
 }
 
 health_check() {
-  local port ok=0
+  local port tport ok=0
   port="$(content_api_port)"
+  tport="$(tui_port)"
 
   wait_for_port "$port" "内容 API" || ok=1
-  wait_for_port 2222 "TUI 服务" || ok=1
+  wait_for_port "$tport" "TUI 服务" || ok=1
 
   local body
   body="$(curl -fsS --max-time 5 "http://127.0.0.1:${port}/" 2>/dev/null)" || {
@@ -235,6 +245,15 @@ health_check() {
   if [[ "$ok" != "0" ]]; then
     c_err "健康检查未通过，最近日志："
     systemctl --user --no-pager -n 25 -u "${SERVICES[@]}" 2>&1 | tail -40
+    # 低端口 EACCES 是最常见的启动失败原因，单独把解法打出来
+    if (( tport < 1024 )); then
+      local start
+      start="$(cat /proc/sys/net/ipv4/ip_unprivileged_port_start 2>/dev/null || echo 1024)"
+      if (( start > tport )); then
+        c_err "PORT=$tport 低于非特权端口下限（$start），这就是启动失败的原因。放开："
+        c_err "  echo 'net.ipv4.ip_unprivileged_port_start=$tport' | sudo tee /etc/sysctl.d/99-scc-site-tui.conf && sudo sysctl --system"
+      fi
+    fi
     return 1
   fi
   return 0
@@ -247,8 +266,11 @@ cmd_status() {
     printf '\n\033[1m── %s ──\033[0m\n' "$s"
     systemctl --user status "$s" --no-pager --lines=0 2>&1 | head -8 || true
   done
-  printf '\n监听端口：\n'
-  ss -tlnp 2>/dev/null | grep -E ':(2222|8787)\b' || echo "  （都没有在监听）"
+  local tport aport
+  tport="$(tui_port)"
+  aport="$(content_api_port)"
+  printf '\n监听端口（.env: PORT=%s, CONTENT_API_PORT=%s）：\n' "$tport" "$aport"
+  ss -tlnp 2>/dev/null | grep -E ":($tport|$aport)\b" || echo "  （都没有在监听）"
   printf '\n已部署版本：%s\n' "$(cat "$STATE_DIR/revision" 2>/dev/null || echo unknown)"
 }
 

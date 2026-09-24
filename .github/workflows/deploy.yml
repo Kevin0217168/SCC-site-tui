@@ -30,6 +30,8 @@ concurrency:
 
 env:
   BUN_VERSION: '1.4.2'
+  # 服务器上的部署目录（相对于 ~）。想改目录名就设仓库变量 DEPLOY_PATH。
+  DEPLOY_PATH: ${{ vars.DEPLOY_PATH || 'ska-site-tui' }}
 
 jobs:
   # ── 构建校验（PR 必过）──────────────────────────────────────────────
@@ -158,9 +160,10 @@ jobs:
         run: |
           set -euo pipefail
           SSH="ssh -i $HOME/.ssh/deploy_key -p ${DEPLOY_PORT:-22} -o IdentitiesOnly=yes -o BatchMode=yes ${DEPLOY_USER}@${DEPLOY_HOST}"
+          REMOTE="~/$DEPLOY_PATH"
 
-          $SSH 'mkdir -p ~/ska-site-tui/.incoming'
-          cat payload.tar.gz | $SSH 'cat > ~/ska-site-tui/.incoming/payload.tar.gz'
+          $SSH "mkdir -p $REMOTE/.incoming"
+          cat payload.tar.gz | $SSH "cat > $REMOTE/.incoming/payload.tar.gz"
           echo "上传完成"
 
       - name: 执行部署
@@ -175,9 +178,10 @@ jobs:
 
           # 服务器上没有 rsync，脚本自己从 stdin 读进来执行。
           # 先把 scripts/ 单独解出来，保证首次部署时也有 deploy.sh。
-          $SSH bash -s <<'REMOTE'
+          # 未加引号的 heredoc：$DEPLOY_PATH 在本地展开，\$HOME 留给远端展开。
+          $SSH bash -s <<REMOTE
           set -euo pipefail
-          cd "$HOME/ska-site-tui"
+          cd "\$HOME/$DEPLOY_PATH"
           mkdir -p .incoming
 
           tar xzf .incoming/payload.tar.gz ./scripts/ 2>/dev/null || true
@@ -193,4 +197,4 @@ jobs:
         run: |
           ssh -i "$HOME/.ssh/deploy_key" -p "${DEPLOY_PORT:-22}" \
             -o IdentitiesOnly=yes -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            'rm -f ~/ska-site-tui/.incoming/payload.tar.gz' || true
+            "rm -f ~/$DEPLOY_PATH/.incoming/payload.tar.gz" || true

@@ -1,6 +1,7 @@
 import { watch, utimesSync } from "node:fs";
-import { resolve } from "node:path";
-import { createServer } from "@opentui/ssh";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+import { createServer, type AuthConfig } from "@opentui/ssh";
 import { render, useTerminalDimensions } from "@opentui/solid";
 import { createStore } from "solid-js/store";
 import { FocusProvider } from "./context/FocusContext"; // 导入你刚才写的代码
@@ -59,6 +60,45 @@ import { usePostContext } from "./context/PostContext";
 import { useSession } from "./context/SessionContext";
 
 const PORT = Number(process.env.PORT ?? 2222);
+
+// ── SSH 认证 ──────────────────────────────────────────────────────────
+// 默认 "open"（无认证），与历史行为一致。
+// 但若监听 22 这类会被扫描器持续探测的端口，建议在 .env 里改用 publickey：
+//   SSH_AUTH=publickey                 # 只允许 ~/.ssh/authorized_keys 里的密钥
+//   SSH_AUTH=anykey                    # 任何持有 SSH 私钥的客户端都能进
+//   SSH_AUTHORIZED_KEYS=/path/to/keys  # 自定义允许名单路径
+function resolveAuth(): AuthConfig {
+  const mode = (process.env.SSH_AUTH ?? "open").trim().toLowerCase();
+
+  switch (mode) {
+    case "":
+    case "open":
+    case "none":
+      return "open";
+
+    case "anykey":
+      return { publicKey: "any" };
+
+    case "publickey": {
+      const configured = process.env.SSH_AUTHORIZED_KEYS?.trim();
+      return {
+        publicKey: {
+          authorizedKeys:
+            configured || join(homedir(), ".ssh", "authorized_keys"),
+        },
+      };
+    }
+
+    default:
+      console.warn(
+        `  ! SSH_AUTH="${mode}" 无法识别（可选 open / anykey / publickey），已回退到 open`,
+      );
+      return "open";
+  }
+}
+
+// 可选：闲置多久后断开连接。暴露在公网时建议设置，避免被扫描器占住会话。
+const IDLE_TIMEOUT = process.env.SSH_IDLE_TIMEOUT?.trim() || undefined;
 
 function KeyboardHandler() {
   const dialog = useDialog();
@@ -172,8 +212,8 @@ for (const parser of parsers.parsers) {
 
 const server = createServer({
   hostKey: { path: "./.keys/host_key" },
-  // auth: { publicKey: "any" },
-  auth: "open",
+  auth: resolveAuth(),
+  idleTimeout: IDLE_TIMEOUT,
 }).serve((session) => {
   session.renderer.targetFps = 60;
   const [sessionStore, setSessionStore] = createStore({
@@ -245,6 +285,16 @@ try {
   console.error(`\n服务启动失败: ${err.message ?? err}`);
   if (err.code === "EADDRINUSE") {
     console.error(`  端口 ${PORT} 已被占用，请关闭占用该端口的进程后重试。`);
+  } else if (err.code === "EACCES" || err.code === "EPERM") {
+    console.error(`  绑定 ${PORT} 端口需要特权（1024 以下），三选一：`);
+    console.error(`    1) 放开非特权端口下限（推荐，一次性，需 root）：`);
+    console.error(
+      `         echo 'net.ipv4.ip_unprivileged_port_start=${PORT}' | sudo tee /etc/sysctl.d/99-scc-site-tui.conf`,
+    );
+    console.error(`         sudo sysctl --system`);
+    console.error(`    2) 只给 bun 授权：`);
+    console.error(`         sudo setcap cap_net_bind_service=+ep "$(readlink -f "$(command -v bun)")"`);
+    console.error(`    3) 换个高位端口：在 .env 里设 PORT=2222`);
   }
   process.exit(1);
 }

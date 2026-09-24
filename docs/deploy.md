@@ -33,15 +33,19 @@ graph TB
 
     subgraph S2["服务器上的两个 systemd 用户服务"]
         S --> A["ska-content-api.service<br/>127.0.0.1:8787"]
-        S --> T["ska-site-tui.service<br/>0.0.0.0:2222"]
+        S --> T["ska-site-tui.service<br/>0.0.0.0:$PORT（默认 2222，可设 22）"]
     end
 
-    U[SSH 客户端] -->|ssh -p 2222| T
+    U[SSH 客户端] -->|ssh -p $PORT| T
     T -->|SKA_WEB_BASE_URL| A
     A --> C["content/*.md"]
 ```
 
 **每次部署的传输量**：
+
+> 本文里的服务器目录统一写作 `~/ska-site-tui`（CI 里的默认值）。
+> 想改名就设仓库变量 `DEPLOY_PATH`（`Settings → Secrets and variables →
+> Actions → Variables`），workflow 和脚本会跟着走。
 
 | 内容 | 大小 | 频率 |
 | --- | --- | --- |
@@ -125,18 +129,42 @@ cd ~/ska-site-tui
 vi .env
 ```
 
-重点确认这四行：
+重点确认这几行：
 
 ```ini
 SKA_WEB_BASE_URL=http://127.0.0.1:8787   # 指向本机内容 API
 CONTENT_API_PORT=8787
+PORT=22                                  # TUI 对外端口；22 需要额外授权，见 3.5.1
 GH_PROXY=https://gh-proxy.com/           # ← 墙内服务器必须填，否则代码块高亮失效
 AI_API_KEY=sk-xxxx                       # 不填则自动禁用 AI 对话
+SSH_AUTH=publickey                       # ← 监听 22 时务必改掉默认的 open，见第八节
+# SSH_IDLE_TIMEOUT=10m
 ```
 
 > `GH_PROXY` 是最容易被忽略的一项。`src/theme/parsers-config.ts` 里 34 个语言的
 > 语法高亮 wasm 默认从 `github.com` 下载，在这台服务器上会 12 秒超时。
 > 填上代理后实测 85 个资产 URL **全部 200**。
+
+#### 3.5.1 若 `PORT` 小于 1024（例如 22）
+
+低端口需要额外授权，否则服务启动时报 `EACCES`。实测本机
+`/proc/sys/net/ipv4/ip_unprivileged_port_start = 1024`，以 `mint` 身份
+`bind(22)` 会直接 `Permission denied`。二选一（需 root 密码）：
+
+```bash
+# 方案 A（推荐）：放开非特权端口下限，一次性，升级 bun 不受影响
+echo 'net.ipv4.ip_unprivileged_port_start=22' | sudo tee /etc/sysctl.d/99-scc-site-tui.conf
+sudo sysctl --system
+
+# 方案 B：只给 bun 二进制授权（注意：升级/重装 bun 后需要重新执行）
+sudo setcap cap_net_bind_service=+ep "$(readlink -f "$HOME/.bun/bin/bun")"
+```
+
+`scripts/provision.sh` 和 `scripts/ska.sh install` 都会自动检测这种情况并把
+命令直接打印出来，不用记。
+
+> ⚠️ **用 22 端口就必须配好认证。** 22 是全互联网扫描量最大的端口，
+> 而本项目默认 `SSH_AUTH=open`，等于把 TUI 完全敞开。详见第八节。
 
 改完重启：
 
@@ -272,7 +300,7 @@ ln -s /path/to/bun ~/.bun/bin/bun  # ska.sh 认这个路径
 ### 端口被占用
 
 ```bash
-ss -tlnp | grep -E ':(2222|8787)'
+ss -tlnp | grep -E ':(22|2222|8787)'    # 换成 .env 里的 PORT / CONTENT_API_PORT
 ```
 
 ## 七、其它部署方式
@@ -303,3 +331,89 @@ usermod -aG docker mint
 2. 每次部署要传 115 MB，比现在的 ~1.5 MB 慢两个数量级。
 
 所以只在「服务器完全无法安装 Bun」时才考虑。
+
+## 八、端口选择与安全
+
+### 端口 22 的风险有多大？
+
+结论：**风险主要来自 `SSH_AUTH=open`（默认值），而不是端口号本身**；
+但端口号会把这个风险放大几个数量级。
+
+在 MintServer-SH 上实测到的相关事实：
+
+| 指标 | 实测值 |
+| --- | --- |
+| 应用空载内存 | 75–78 MB RSS |
+| 每个会话增量 | ≈ 4 MB（3 个会话 75 → 86 MB） |
+| 服务器内存 | 总 1973 MB，空闲 **371 MB**，available 1486 MB |
+| 并发会话上限 | 100（框架默认 `limits.session.global`），**无速率限制** |
+| 文件描述符上限 | 1024（`ulimit -n`） |
+| 以 `mint` 身份 bind(22) | `Permission denied`（`ip_unprivileged_port_start=1024`） |
+
+风险清单，按严重程度：
+
+1. **零认证 = 零门槛。** `auth: "open"` 下任何完成连接的人直接进入 TUI。
+   实测 `ssh -p 2399 任意用户名@127.0.0.1` 不带任何凭据就拿到了会话。
+2. **AI 额度可被盗刷。** `src/api/chat.ts` 用的是服务端 `.env` 里的
+   `AI_API_KEY`，访客每次对话都花你的钱。这是最实际的损失。
+3. **内容全公开。** `content/` 下所有文章、笔记与 `profile.yml` 都可被读取。
+4. **资源耗尽。** 按实测每会话约 4 MB，100 个并发 ≈ 400 MB，而空闲内存只有
+   371 MB，所以**并发到几十个就有 OOM 风险**。更麻烦的是 OOM killer 可能顺手
+   杀掉 `sshd`，那样你会直接失去远程登录能力。
+5. **噪音与误判。** 22 会被持续探测，日志查询被淹没；而且 `ssh host` 连上的是
+   TUI 而不是 shell，日后自己也会困惑。
+
+> 说明：我**没有**这台机器上 22 端口的扫描量实测数据 —— 22 上没东西在听，
+> 扫也扫不出日志；`auth.log` 属 `root:adm` 而当前用户在 `mint sudo` 组读不到；
+> `lastb` 未安装。所以"22 是扫描量最大的端口"属于普遍事实，
+> 不是我在这里测出来的数字，这里就不给具体次数。
+
+### 建议
+
+| 场景 | 建议 |
+| --- | --- |
+| 自己/小圈子用，不在乎多加 `-p` | **留在 2222**，加 `SSH_AUTH=anykey` 就足以挡住扫描器 |
+| 一定要用 22（想要 `ssh host` 的干净体验） | **必须** `SSH_AUTH=publickey`，并设 `SSH_IDLE_TIMEOUT` |
+| 只给特定人访问 | 安全组/防火墙限制来源 IP，比任何应用层手段都有效 |
+
+**任何情况下都不要**在公网 22 端口上保留 `SSH_AUTH=open`。
+
+### 加固配置示例
+
+```ini
+# .env
+PORT=22
+SSH_AUTH=publickey
+SSH_IDLE_TIMEOUT=15m
+```
+
+公钥名单默认读 `~/.ssh/authorized_keys`：
+
+```bash
+ssh MintServer-SH
+cat >> ~/.ssh/authorized_keys <<'EOF'
+ssh-ed25519 AAAA... 你的笔记本
+EOF
+systemctl --user restart ska-site-tui
+```
+
+验证认证确实生效 —— 下面这条应当被拒绝，而不是进入界面：
+
+```bash
+ssh -o PreferredAuthentications=none -p 22 nobody@111.229.10.239
+# 期望：Permission denied (publickey).
+# 若直接进了 TUI，说明 SSH_AUTH 没生效，检查 .env 是否被服务读到
+```
+
+### 进一步收窄
+
+框架支持按连接数收口，改 `src/index.tsx` 的 `createServer`：
+
+```ts
+createServer({
+  hostKey: { path: "./.keys/host_key" },
+  auth: resolveAuth(),
+  idleTimeout: IDLE_TIMEOUT,
+  limits: { session: { global: 10, perConnection: 1 } }, // 默认 global 是 100
+})
+```

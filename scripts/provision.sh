@@ -182,14 +182,41 @@ check_hostname() {
   fi
 }
 
+# 监听 1024 以下的端口（如 22）需要额外授权，否则服务启动时 EACCES
+check_low_port() {
+  local port start
+  port="$(grep -E '^PORT=' "$PROJECT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '[:space:]')"
+  port="${port:-2222}"
+  [[ "$port" =~ ^[0-9]+$ ]] || return 0
+  (( port >= 1024 )) && return 0
+
+  start="$(cat /proc/sys/net/ipv4/ip_unprivileged_port_start 2>/dev/null || echo 1024)"
+  [[ "$start" =~ ^[0-9]+$ ]] || start=1024
+  if (( start <= port )); then
+    c_ok "PORT=$port 在非特权端口范围内，无需额外授权"
+    return 0
+  fi
+
+  c_warn "PORT=$port 低于非特权端口下限（$start），服务会因 EACCES 起不来。"
+  c_warn "放开方式（需 root，一次性，二选一）："
+  printf '\n    echo "net.ipv4.ip_unprivileged_port_start=%s" | sudo tee /etc/sysctl.d/99-scc-site-tui.conf\n    sudo sysctl --system\n\n' "$port"
+  c_warn "或只给 bun 单独授权（注意：升级/重装 bun 后会失效）："
+  printf '\n    sudo setcap cap_net_bind_service=+ep %s\n\n' "$BUN_BIN"
+}
+
 # ── 汇总 ──────────────────────────────────────────────────────────────
 summary() {
+  local port
+  port="$(grep -E '^PORT=' "$PROJECT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '[:space:]')"
+  port="${port:-2222}"
+
   printf '\n\033[1m── 体检结果 ──\033[0m\n'
   printf '  项目目录   %s\n' "$PROJECT_DIR"
   printf '  Bun        %s\n' "$([[ -x $BUN_BIN ]] && "$BUN_BIN" --version || echo '未安装')"
   printf '  服务单元   %s\n' "$(ls "$UNIT_DIR"/ska-*.service 2>/dev/null | wc -l) 个"
   printf '  .env       %s\n' "$([[ -f $PROJECT_DIR/.env ]] && echo '已就绪' || echo '缺失')"
-  printf '  2222 端口  %s\n' "$(ss -tln 2>/dev/null | grep -q ':2222' && echo '被占用' || echo '空闲')"
+  printf '  TUI 端口   %s（%s）\n' "$port" \
+    "$(ss -tln 2>/dev/null | grep -q ":$port\b" && echo '已被占用' || echo '空闲')"
   printf '\n'
 }
 
@@ -212,6 +239,7 @@ main() {
   install_services
   check_linger
   check_hostname
+  check_low_port
   summary
   c_info "下一步：在本地/CI 执行一次部署，或直接跑 $PROJECT_DIR/scripts/deploy.sh"
 }

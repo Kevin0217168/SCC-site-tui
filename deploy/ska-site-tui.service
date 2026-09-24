@@ -1,15 +1,25 @@
 [Unit]
-Description=ska-site-tui SSH 终端博客服务（监听 2222）
-Documentation=https://github.com/sAkuraOfficial/ska-site-tui
+Description=SCC-site-tui SSH 终端博客服务
+Documentation=https://github.com/Kevin0217168/SCC-site-tui
 After=network.target ska-content-api.service
 # 内容 API 挂了主服务仍能启动（有磁盘缓存兜底），所以用 Wants 而不是 Requires
 Wants=ska-content-api.service
 
 [Service]
 Type=simple
-# 必须用项目根目录：
-#   .keys/host_key（SSH 主密钥）与 .data/（内容缓存）都是相对 cwd 解析的
-WorkingDirectory=%h/ska-site-tui
+# @PROJECT_DIR@ 是占位符，安装时由 scripts/ska.sh / scripts/deploy.sh
+# 替换成本机实际的绝对路径 —— 这样仓库可以 checkout 到任意目录。
+#
+# 必须是项目根目录：.keys/host_key（SSH 主机密钥）与 .data/（内容缓存）
+# 都是相对 cwd 解析的。
+WorkingDirectory=@PROJECT_DIR@
+
+# 监听 1024 以下的端口需要额外授权，装完用下面任一方式放开：
+#   echo 'net.ipv4.ip_unprivileged_port_start=22' | sudo tee /etc/sysctl.d/99-scc-site-tui.conf
+#   sudo sysctl --system
+# 或者只给 bun 单独授权：
+#   sudo setcap cap_net_bind_service=+ep "$(readlink -f "$HOME/.bun/bin/bun")"
+# 没做这一步服务会因 EACCES 启动失败，日志里会打印同样的提示。
 ExecStart=%h/.bun/bin/bun run dist/index.js
 Restart=always
 RestartSec=3
