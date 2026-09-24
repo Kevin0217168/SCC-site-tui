@@ -134,21 +134,21 @@ vi .env
 ```ini
 SKA_WEB_BASE_URL=http://127.0.0.1:8787   # 指向本机内容 API
 CONTENT_API_PORT=8787
-PORT=22                                  # TUI 对外端口；22 需要额外授权，见 3.5.1
+PORT=2222                                # TUI 对外端口
 GH_PROXY=https://gh-proxy.com/           # ← 墙内服务器必须填，否则代码块高亮失效
 AI_API_KEY=sk-xxxx                       # 不填则自动禁用 AI 对话
-SSH_AUTH=publickey                       # ← 监听 22 时务必改掉默认的 open，见第八节
-# SSH_IDLE_TIMEOUT=10m
+SSH_AUTH=open                            # 默认不认证；含义与加固方式见第八节
 ```
 
 > `GH_PROXY` 是最容易被忽略的一项。`src/theme/parsers-config.ts` 里 34 个语言的
 > 语法高亮 wasm 默认从 `github.com` 下载，在这台服务器上会 12 秒超时。
 > 填上代理后实测 85 个资产 URL **全部 200**。
 
-#### 3.5.1 若 `PORT` 小于 1024（例如 22）
+#### 3.5.1 （可选）想改用 22 端口
 
-低端口需要额外授权，否则服务启动时报 `EACCES`。实测本机
-`/proc/sys/net/ipv4/ip_unprivileged_port_start = 1024`，以 `mint` 身份
+当前部署用的是 2222，**不需要看这一节**。若以后想换成 22（那样就能省掉
+`-p 2222`、直接 `ssh host`），低端口需要额外授权，否则服务启动时报 `EACCES`。
+实测本机 `/proc/sys/net/ipv4/ip_unprivileged_port_start = 1024`，以 `mint` 身份
 `bind(22)` 会直接 `Permission denied`。二选一（需 root 密码）：
 
 ```bash
@@ -163,8 +163,8 @@ sudo setcap cap_net_bind_service=+ep "$(readlink -f "$HOME/.bun/bin/bun")"
 `scripts/provision.sh` 和 `scripts/ska.sh install` 都会自动检测这种情况并把
 命令直接打印出来，不用记。
 
-> ⚠️ **用 22 端口就必须配好认证。** 22 是全互联网扫描量最大的端口，
-> 而本项目默认 `SSH_AUTH=open`，等于把 TUI 完全敞开。详见第八节。
+> ⚠️ **若改用 22 端口，请同时把认证配好。** 22 是全互联网扫描量最大的
+> 端口，而这项目默认 `SSH_AUTH=open`，等于把 TUI 完全敞开。详见第八节。
 
 改完重启：
 
@@ -334,6 +334,18 @@ usermod -aG docker mint
 
 ## 八、端口选择与安全
 
+### 本项目的当前选择
+
+| 项 | 值 |
+| --- | --- |
+| 监听端口 | **2222**（`PORT=2222`） |
+| 认证 | **`SSH_AUTH=open`（不认证）** —— 与项目原本的设计一致 |
+| 加固状态 | 未加固。任何能连上 2222 的人都会直接拿到会话，并可使用 `.env` 里的 AI 额度 |
+
+理由：2222 的扫描面远小于 22，而 22 需要额外 sysctl 授权。
+**这条路子的风险下限可以接受，但前提是：不要用 22，且知道 AI 额度是公开的。**
+要收紧就直接跳到最后两小节。
+
 ### 端口 22 的风险有多大？
 
 结论：**风险主要来自 `SSH_AUTH=open`（默认值），而不是端口号本身**；
@@ -372,7 +384,8 @@ usermod -aG docker mint
 
 | 场景 | 建议 |
 | --- | --- |
-| 自己/小圈子用，不在乎多加 `-p` | **留在 2222**，加 `SSH_AUTH=anykey` 就足以挡住扫描器 |
+| **当前选择：自己/小圈子用，不介意多打 `-p 2222`** | **留在 2222 + open**（注意 AI 额度公开） |
+| 想便宜地挡掉扫描器 | `SSH_AUTH=anykey` —— 只要客户端有任意 SSH 私钥就能进，扫描器一般没有 |
 | 一定要用 22（想要 `ssh host` 的干净体验） | **必须** `SSH_AUTH=publickey`，并设 `SSH_IDLE_TIMEOUT` |
 | 只给特定人访问 | 安全组/防火墙限制来源 IP，比任何应用层手段都有效 |
 

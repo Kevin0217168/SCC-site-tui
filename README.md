@@ -6,7 +6,7 @@
 
 
 ```bash
-ssh 111.229.10.239        # 部署在 MintServer-SH，默认监听 22 端口
+ssh -p 2222 111.229.10.239        # 部署在 MintServer-SH
 ```
 
 ![License](https://www.shieldcn.dev/github/license/Kevin0217168/SCC-site-tui.svg?variant=ghost&size=sm) 
@@ -44,10 +44,11 @@ bun run build
 ### 连接
 
 ```bash
-ssh -p <PORT> user@your-server   # PORT 默认 2222，部署在 MintServer-SH 时是 22
+ssh -p 2222 user@your-server
 ```
 
 > 默认任意用户名即可，无需密码 —— 安全影响见下方「安全提示」。
+> 端口由 `.env` 里的 `PORT` 决定（默认 2222）。
 
 ### 部署到服务器
 
@@ -58,8 +59,8 @@ ssh -p <PORT> user@your-server   # PORT 默认 2222，部署在 MintServer-SH �
 ### 安全提示
 
 默认 `SSH_AUTH=open`，**任何能连到该端口的人都会直接拿到一个会话**，
-并可以使用你在 `.env` 里配置的 AI 额度。本地开发无所谓；一旦暴露到公网
-（尤其监听 22 端口时）请务必改成密钥认证：
+并可以使用你在 `.env` 里配置的 AI 额度。这是本项目原本就有的设计
+（与是否换端口无关）。若想收紧，改成密钥认证：
 
 ```ini
 # .env
