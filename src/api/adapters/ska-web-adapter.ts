@@ -20,7 +20,11 @@ export interface SkaWebAdapterConfig {
   resource: SkaWebResource;
 }
 
-const CACHE_TTL_MS = 30 * 60 * 1000;
+// 目录缓存有效期。内容源在本机时（本地 markdown 目录）可以调小到几秒，
+// 这样「存盘 → TUI 可见」几乎无延迟；远程源建议保持默认的 30 分钟。
+const CACHE_TTL_MS = Number(
+  process.env.CONTENT_CACHE_TTL_MS ?? 30 * 60 * 1000,
+);
 
 const listCache = new Map<string, types.PostVo[]>();
 const lastFetchTime = new Map<string, number>();

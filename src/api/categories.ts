@@ -33,6 +33,12 @@ export const CONTENT_CATEGORIES: readonly ContentCategory[] = [
 
 export const DEFAULT_CONTENT_CATEGORY_ID = CONTENT_CATEGORIES[0]!.id;
 
+/**
+ * RSS 源「全部」伪分类的 id。
+ * RSS 的分类是拉取后从路径推导的，加一个「全部」保证默认视图仍是完整列表。
+ */
+export const RSS_ALL_CATEGORY_ID = "all";
+
 export function getContentCategory(id?: string | null): ContentCategory {
   return (
     CONTENT_CATEGORIES.find((c) => c.id === id) ?? CONTENT_CATEGORIES[0]!
@@ -41,6 +47,28 @@ export function getContentCategory(id?: string | null): ContentCategory {
 
 export function contentCategoryIndex(id?: string | null): number {
   const idx = CONTENT_CATEGORIES.findIndex((c) => c.id === id);
+  return idx >= 0 ? idx : 0;
+}
+
+/**
+ * 在给定分类列表里校验 id；id 不存在（比如切换内容源后旧分类失效）
+ * 时回退到第一项。列表为空则返回 undefined，表示不显示分类栏。
+ */
+export function resolveCategoryId(
+  list: readonly ContentCategory[],
+  id?: string | null,
+): string | undefined {
+  const first = list[0];
+  if (!first) return undefined;
+  return id && list.some((c) => c.id === id) ? id : first.id;
+}
+
+/** 在给定分类列表里找下标，找不到返回 0 */
+export function categoryIndexIn(
+  list: readonly ContentCategory[],
+  id?: string | null,
+): number {
+  const idx = list.findIndex((c) => c.id === id);
   return idx >= 0 ? idx : 0;
 }
 

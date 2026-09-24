@@ -15,7 +15,8 @@ import { usePostContext } from "../context/PostContext";
 import { postToMarkdown } from "../lib/postToMarkdown";
 import { useSession } from "../context/SessionContext";
 import { TextAttributes } from "@opentui/core";
-import { getContentCategory } from "../api/categories";
+import { resolveCategoryId } from "../api/categories";
+import { sourcesRevision } from "../api/adapters/revision";
 import { useFocusGroup, useFocusManager } from "../context/FocusContext";
 
 export function MainContent() {
@@ -32,6 +33,8 @@ export function MainContent() {
   useFocusGroup("main");
 
   const categories = createMemo(() => {
+    // 订阅分类版本号：RSS 源的分类是拉到数据之后才推导出来的
+    sourcesRevision();
     try {
       return getAdapter(currentSource()).categories ?? [];
     } catch {
@@ -39,19 +42,21 @@ export function MainContent() {
     }
   });
 
-  const activeCategory = createMemo(() =>
-    categories().length > 0 ? getContentCategory(currentCategory()) : undefined,
+  /** 当前生效的分类 id；切换内容源后旧分类失效时会回退到第一项 */
+  const activeCategoryId = createMemo(() =>
+    resolveCategoryId(categories(), currentCategory()),
   );
 
+  const activeCategory = createMemo(() => {
+    const id = activeCategoryId();
+    return id ? categories().find((c) => c.id === id) : undefined;
+  });
+
   const [posts] = createResource(
-    () => ({ sourceId: currentSource(), category: currentCategory() }),
+    () => ({ sourceId: currentSource(), category: activeCategoryId() }),
     async ({ sourceId, category }) => {
       const adapter = getAdapter(sourceId);
-      return adapter.queryPosts({
-        page: 1,
-        size: undefined,
-        category: adapter.categories ? category : undefined,
-      });
+      return adapter.queryPosts({ page: 1, size: undefined, category });
     },
   );
 
@@ -64,7 +69,7 @@ export function MainContent() {
   createEffect(() => {
     const post = showPost();
     const sourceId = currentSource();
-    const categoryId = currentCategory();
+    const categoryId = activeCategoryId();
     if (post) {
       postToMarkdown(post, sourceId, categoryId).then((md) => {
         if (currentSource() !== sourceId || showPost()?.metadata.name !== post.metadata.name) return;
@@ -117,8 +122,11 @@ export function MainContent() {
         style={{
           width: "100%",
           flexDirection: "row",
+          // 终端不够宽时自动折成两行，避免右侧提示被裁掉
+          flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
+          columnGap: 2,
           paddingBottom: 1,
           paddingX: 3,
         }}
@@ -158,7 +166,7 @@ export function MainContent() {
           handleClose={handleClosePost}
           post={showPost() as ListedPostVo}
           sourceId={currentSource()}
-          categoryId={currentCategory()}
+          categoryId={activeCategoryId()}
         />
       </Show>
       <Show when={showPost() == null}>

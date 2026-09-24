@@ -151,7 +151,9 @@ function App({
             <DialogProvider>
               <KeyboardHandler />
               {/* 这里数组会影响初始焦点顺序 */}
-              <FocusProvider groups={["main", "category", "sidebar"]}>
+              <FocusProvider
+                groups={["main", "category", "friends", "sidebar"]}
+              >
                 <AppContent name={name} />
               </FocusProvider>
             </DialogProvider>

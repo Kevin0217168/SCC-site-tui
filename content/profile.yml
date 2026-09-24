@@ -1,0 +1,29 @@
+# 「关于」页数据源，对应 GET /api/v1/profile
+name: mint
+role: 运维 / 家庭实验室折腾爱好者
+bio:
+  - 用 nginx、PVE、KVM 这些工具把家里的机器串起来。
+  - 博客写在 mintlab.top，内容都是踩坑记录。
+links:
+  - label: 主站
+    href: https://www.mintlab.top/
+  - label: RSS
+    href: https://www.mintlab.top/rss.xml
+works:
+  - title: Mint Lab
+    description: Astro 构建的个人技术博客，记录内网运维与虚拟化的实战笔记。
+    href: https://www.mintlab.top/
+    year: "2026"
+    tags: [Astro, 博客]
+site:
+  name: local
+  title: 本地内容源
+  subtitle: 由本地 markdown 目录驱动
+  description: 用自己维护的 markdown 提供 ska-web Public API v1 兼容接口
+  url: http://localhost:4321
+aboutMd: |
+  这个内容源完全由本地的 markdown 文件驱动，没有数据库，也没有外部服务。
+
+  写作流程就是「存盘 → TUI 可见」，因为服务端每次请求都重新读盘。
+nowMd: |
+  正在验证本地写作到 TUI 渲染的完整链路。

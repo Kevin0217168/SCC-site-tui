@@ -1,0 +1,21 @@
+[Unit]
+Description=ska-site-tui SSH 终端博客服务（监听 2222）
+Documentation=https://github.com/sAkuraOfficial/ska-site-tui
+After=network.target ska-content-api.service
+# 内容 API 挂了主服务仍能启动（有磁盘缓存兜底），所以用 Wants 而不是 Requires
+Wants=ska-content-api.service
+
+[Service]
+Type=simple
+# 必须用项目根目录：
+#   .keys/host_key（SSH 主密钥）与 .data/（内容缓存）都是相对 cwd 解析的
+WorkingDirectory=%h/ska-site-tui
+ExecStart=%h/.bun/bin/bun run dist/index.js
+Restart=always
+RestartSec=3
+# 端口、SKA_WEB_BASE_URL、AI 配置都从项目根的 .env 自动加载
+Environment=OTUI_USE_CONSOLE=false
+Environment=SHOW_CONSOLE=false
+
+[Install]
+WantedBy=default.target

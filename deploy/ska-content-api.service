@@ -1,0 +1,16 @@
+[Unit]
+Description=ska-site-tui 本地内容 API（content/*.md -> ska-web Public API v1）
+Documentation=https://github.com/sAkuraOfficial/ska-site-tui
+After=network.target
+
+[Service]
+Type=simple
+# 必须用项目根目录：内容目录 content/ 是相对路径解析的
+WorkingDirectory=%h/ska-site-tui
+ExecStart=%h/.bun/bin/bun run %h/ska-site-tui/tools/content-api.ts
+Restart=on-failure
+RestartSec=3
+# 端口从项目根的 .env 读取（CONTENT_API_PORT，默认 8787）
+
+[Install]
+WantedBy=default.target
