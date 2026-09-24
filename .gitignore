@@ -28,6 +28,10 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 *.tsbuildinfo
 .data
 
+# deployment runtime state (server-side only)
+.deploy-state
+.incoming
+
 # IntelliJ based IDEs
 .idea
 

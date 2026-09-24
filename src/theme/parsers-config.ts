@@ -1,4 +1,6 @@
-export default {
+import { rewriteGithubUrls } from "./github-proxy";
+
+const config = {
   // NOTE: FOR markdown, javascript and typescript, we use the opentui built-in parsers
   // Warn: when taking queries from the nvim-treesitter repo, make sure to include the query dependencies as well
   //       marked with for example `; inherits: ecma` at the top of the file. Just put the dependencies before the actual query.
@@ -383,4 +385,9 @@ export default {
       },
     },
   ],
-}
+};
+
+// 墙内服务器直连 github.com 会超时，导致代码块高亮失效。
+// 设置 GH_PROXY（见 .env.example）后会把这些 URL 改写为走代理，
+// 未设置时行为与改动前完全一致。
+export default rewriteGithubUrls(config);

@@ -1,0 +1,196 @@
+name: Deploy
+
+# PR / 非 master 分支 → 只构建校验，提前发现坏代码
+# push 到 master      → 构建 + 推送到 MintServer-SH 并重启服务
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'docs/**'
+      - 'notes/**'
+      - 'README.md'
+      - 'LICENSE'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'notes/**'
+      - 'README.md'
+      - 'LICENSE'
+  workflow_dispatch:
+    inputs:
+      skip_deploy:
+        description: '只构建不部署'
+        type: boolean
+        default: false
+
+# 同一时间只允许一个部署在跑，避免两次 push 互相踩
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: '1.4.2'
+
+jobs:
+  # ── 构建校验（PR 必过）──────────────────────────────────────────────
+  build:
+    name: 构建校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: 构建
+        run: bun run build
+
+      - name: 检查产物
+        run: |
+          set -euo pipefail
+          test -f dist/index.js || { echo "::error::dist/index.js 没有生成"; exit 1; }
+          echo "产物大小：$(du -h dist/index.js | cut -f1)"
+
+  # ── 推送部署 ────────────────────────────────────────────────────────
+  deploy:
+    name: 部署到 MintServer-SH
+    needs: build
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/master'
+      || (github.event_name == 'workflow_dispatch'
+          && github.ref == 'refs/heads/master'
+          && inputs.skip_deploy != true)
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: 安装依赖
+        run: bun install --frozen-lockfile
+
+      - name: 构建
+        run: bun run build
+
+      - name: 组装部署产物
+        run: |
+          set -euo pipefail
+          rm -rf build payload.tar.gz
+          mkdir -p build
+
+          # 运行必需
+          cp -r dist        build/dist
+          cp -r content     build/content
+          cp -r tools       build/tools
+          cp -r deploy      build/deploy
+          cp -r scripts     build/scripts
+
+          # 依赖锁 + 手动重建时用得到
+          cp package.json bun.lock tsconfig.json build.ts bunfig.toml .env.example build/
+
+          git rev-parse --short HEAD > build/REVISION
+
+          # 不包含 node_modules：服务器上只在 bun.lock 变化时重装
+          tar czf payload.tar.gz -C build .
+
+          echo "### 部署产物" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ls -lh payload.tar.gz | awk '{print "payload.tar.gz  " $5}' >> "$GITHUB_STEP_SUMMARY"
+          tar tzf payload.tar.gz | wc -l | awk '{print "文件数          " $1}' >> "$GITHUB_STEP_SUMMARY"
+          echo "commit          ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # 还没配 Secrets 时不要报红失败，只跳过并给提示
+      - name: 检查部署凭据
+        id: guard
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "$DEPLOY_SSH_KEY" ]] || missing+=(DEPLOY_SSH_KEY)
+          [[ -n "$DEPLOY_HOST"    ]] || missing+=(DEPLOY_HOST)
+          [[ -n "$DEPLOY_USER"    ]] || missing+=(DEPLOY_USER)
+
+          if (( ${#missing[@]} )); then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::缺少 secret：${missing[*]}，已跳过部署。配置方法见 docs/deploy.md 第 3.6 节。"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 配置 SSH
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # 优先用预置的 known_hosts（更安全）；没配就现场扫描
+          if [[ -n "$DEPLOY_KNOWN_HOSTS" ]]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${DEPLOY_PORT:-22}" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: 上传产物
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          SSH="ssh -i $HOME/.ssh/deploy_key -p ${DEPLOY_PORT:-22} -o IdentitiesOnly=yes -o BatchMode=yes ${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          $SSH 'mkdir -p ~/ska-site-tui/.incoming'
+          cat payload.tar.gz | $SSH 'cat > ~/ska-site-tui/.incoming/payload.tar.gz'
+          echo "上传完成"
+
+      - name: 执行部署
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          SSH="ssh -i $HOME/.ssh/deploy_key -p ${DEPLOY_PORT:-22} -o IdentitiesOnly=yes -o BatchMode=yes ${DEPLOY_USER}@${DEPLOY_HOST}"
+
+          # 服务器上没有 rsync，脚本自己从 stdin 读进来执行。
+          # 先把 scripts/ 单独解出来，保证首次部署时也有 deploy.sh。
+          $SSH bash -s <<'REMOTE'
+          set -euo pipefail
+          cd "$HOME/ska-site-tui"
+          mkdir -p .incoming
+
+          tar xzf .incoming/payload.tar.gz ./scripts/ 2>/dev/null || true
+          bash scripts/deploy.sh --payload .incoming/payload.tar.gz
+          REMOTE
+
+      - name: 清理远程产物
+        if: always() && steps.guard.outputs.ready == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i "$HOME/.ssh/deploy_key" -p "${DEPLOY_PORT:-22}" \
+            -o IdentitiesOnly=yes -o BatchMode=yes "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            'rm -f ~/ska-site-tui/.incoming/payload.tar.gz' || true

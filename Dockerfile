@@ -4,7 +4,8 @@ FROM oven/bun:1 AS builder
 WORKDIR /app
 
 # Install dependencies first (better layer caching)
-COPY package.json bun.lockb* ./
+# 注意：Bun 1.2+ 的锁文件是文本格式的 bun.lock，不再是 bun.lockb
+COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile 2>/dev/null || bun install
 
 # Copy source and build
